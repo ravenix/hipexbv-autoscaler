@@ -421,7 +421,7 @@ func createServer(n *hetznerNodeGroup) error {
 			return fmt.Errorf("could not find matching ip address for server %d in network %d within subnet %v", server.ID, n.network.ID, n.ipNet)
 		}
 
-		networkAttachResult, _, err := n.manager.client.Server.AttachToNetwork(n.manager.apiCallContext, server, hcloud.ServerAttachToNetworkOpts{
+		_, _, err := n.manager.client.Server.AttachToNetwork(n.manager.apiCallContext, server, hcloud.ServerAttachToNetworkOpts{
 			Network: n.network,
 			IP:      scheduledIP,
 		})
