@@ -137,8 +137,7 @@ func (n *hetznerNodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
 		go func(node *apiv1.Node) {
 			klog.Infof("Evicting server %s", node.Name)
 
-			err := n.manager.deleteByNode(node)
-			if err != nil {
+			if err := n.manager.deleteByNode(node); err != nil {
 				klog.Errorf("failed to delete server ID %d error: %v", node.Name, err)
 			}
 
@@ -147,7 +146,10 @@ func (n *hetznerNodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
 	}
 
 	waitGroup.Wait()
-	_ :=n.refreshServers()
+	
+	if err := n.refreshServers(); err != nil {
+		klog.Errorf("failed to refresh servers: %v", err)
+	}
 
 	return nil
 }
@@ -230,8 +232,7 @@ func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, err
 // Allows to tell the theoretical node group from the real one. Implementation
 // required.
 func (n *hetznerNodeGroup) Exist() bool {
-	_, exists := n.manager.nodeGroups[n.id]
-	return exists
+	return true
 }
 
 // Create creates the node group on the cloud provider side. Implementation
@@ -361,7 +362,8 @@ func createServer(n *hetznerNodeGroup) error {
 		for _, s := range n.servers {
 			for _, p := range s.PrivateNet {
 				if p.Network.ID == n.network.ID {
-					append(allocatedIPs, p.IP, p.AliasIPs...)
+					append(allocatedIPs, p.IP)
+					append(allocatedIPs, p.Aliases...)
 				}
 			}
 		}
@@ -418,7 +420,7 @@ func createServer(n *hetznerNodeGroup) error {
 			return fmt.Errorf("could not find matching ip address for server %d in network %d within subnet %v", server.ID, n.network.ID, n.ipNet)
 		}
 
-		networkAttachResult, _, err := n.manager.client.Server.AttachToNetwork(n.manager.apiCallContext, hcloud.ServerAttachToNetworkOpts{
+		networkAttachResult, _, err := n.manager.client.Server.AttachToNetwork(n.manager.apiCallContext, server, hcloud.ServerAttachToNetworkOpts{
 			Network: n.network,
 			IP:      scheduledIP,
 		})

@@ -224,7 +224,7 @@ func createNodeGroup(manager *hetznerManager, groupSpec string) (*hetznerNodeGro
 	}
 
 	if len(tokens) == 7 {
-		network, _, err := manager.client.Get(manager.apiCallContext, tokens[6])
+		network, _, err := manager.client.Network.Get(manager.apiCallContext, tokens[6])
 		if err != nil {
 			return nil, fmt.Errorf("failed to find network by name or id: %s, expected existing network", tokens[6])
 		}
