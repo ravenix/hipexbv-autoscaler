@@ -147,7 +147,7 @@ func (n *hetznerNodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
 	}
 
 	waitGroup.Wait()
-	n.refreshServers()
+	_ :=n.refreshServers()
 
 	return nil
 }
@@ -403,7 +403,7 @@ func createServer(n *hetznerNodeGroup) error {
 			    continue
 			}
 
-			range allocatedIP := allocatedIPs {
+			for _, allocatedIP := range allocatedIPs {
 				if scheduledIP.Equal(allocatedIP) {
 					continue NEXT_IP
 				}
