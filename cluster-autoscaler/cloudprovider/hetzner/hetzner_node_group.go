@@ -298,7 +298,7 @@ func toInstanceStatus(status hcloud.ServerStatus) *cloudprovider.InstanceStatus 
 
 func newNodeName(n *hetznerNodeGroup, scheduledIP net.IP) string {
 	if scheduledIP != nil {
-		return fmt.Sprintf("%s-%s", n.id, strings.Replace(strings.Replace(scheduledIP.String(), ".", "-"), ":", "-"))
+		return fmt.Sprintf("%s-%s", n.id, strings.ReplaceAll(strings.ReplaceAll(scheduledIP.String(), ".", "-"), ":", "-"))
 	}
 
 	return fmt.Sprintf("%s-%d", n.id, rand.Int63())
