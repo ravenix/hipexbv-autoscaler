@@ -358,8 +358,8 @@ func createServer(n *hetznerNodeGroup) error {
 	if n.network != nil {
 		allocatedIPs := []net.IP{}
 
-		_, s := range n.servers {
-			_, p := range s.PrivateNet {
+		for _, s := range n.servers {
+			for _, p := range s.PrivateNet {
 				if p.Network.ID == n.network.ID {
 					append(allocatedIPs, p.IP, p.AliasIPs...)
 				}
