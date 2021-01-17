@@ -232,13 +232,14 @@ func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, err
 // Allows to tell the theoretical node group from the real one. Implementation
 // required.
 func (n *hetznerNodeGroup) Exist() bool {
-	return true
+	_, exists := n.manager.nodeGroups[n.id]
+	return exists
 }
 
 // Create creates the node group on the cloud provider side. Implementation
 // optional.
 func (n *hetznerNodeGroup) Create() (cloudprovider.NodeGroup, error) {
-	return _, cloudprovider.ErrNotImplemented
+	return nil, cloudprovider.ErrNotImplemented
 }
 
 // Delete deletes the node group on the cloud provider side.  This will be
@@ -362,8 +363,8 @@ func createServer(n *hetznerNodeGroup) error {
 		for _, s := range n.servers {
 			for _, p := range s.PrivateNet {
 				if p.Network.ID == n.network.ID {
-					append(allocatedIPs, p.IP)
-					append(allocatedIPs, p.Aliases...)
+					allocatedIPs = append(allocatedIPs, p.IP)
+					allocatedIPs = append(allocatedIPs, p.Aliases...)
 				}
 			}
 		}
