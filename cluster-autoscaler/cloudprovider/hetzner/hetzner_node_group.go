@@ -296,9 +296,9 @@ func toInstanceStatus(status hcloud.ServerStatus) *cloudprovider.InstanceStatus 
 	return st
 }
 
-func newNodeName(n *hetznerNodeGroup, scheduledIP Net.IP) string {
+func newNodeName(n *hetznerNodeGroup, scheduledIP net.IP) string {
 	if scheduledIP != nil {
-		return fmt.Sprintf("%s-%s", n.id, strings.replace(scheduledIP, ".", "-"))
+		return fmt.Sprintf("%s-%s", n.id, strings.Replace(scheduledIP, ".", "-"))
 	}
 
 	return fmt.Sprintf("%s-%d", n.id, rand.Int63())
@@ -405,7 +405,7 @@ func createServer(n *hetznerNodeGroup) error {
 		}
 
 		if !n.ipNet.Contains(scheduledIP) {
-			return fmt.Errorf("could not find matching ip address for server %d in network %d within subnet %v", server.ID, n.network.ID, n.ipNet)
+			return fmt.Errorf("could not find free ip address in network %d within subnet %v", n.network.ID, n.ipNet)
 		}
 	}
 
