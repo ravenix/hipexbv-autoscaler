@@ -208,7 +208,7 @@ func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, err
 
 	node := apiv1.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   newNodeName(n),
+			Name:   newNodeName(n, nil),
 			Labels: map[string]string{},
 		},
 		Status: apiv1.NodeStatus{
