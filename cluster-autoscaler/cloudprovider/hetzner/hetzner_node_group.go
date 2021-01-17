@@ -17,6 +17,8 @@ limitations under the License.
 package hetzner
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -26,6 +28,7 @@ import (
 	"k8s.io/klog/v2"
 	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	"math/rand"
+	"net"
 	"strconv"
 	"sync"
 	"time"
@@ -42,16 +45,12 @@ type hetznerNodeGroup struct {
 	targetSize   int
 	region       string
 	instanceType string
+	servers      []*hcloud.Server
+
+	network      *hcloud.Network
+	ipNet        *net.IPNet
 
 	clusterUpdateMutex *sync.Mutex
-}
-
-type hetznerNodeGroupSpec struct {
-	name         string
-	minSize      int
-	maxSize      int
-	region       string
-	instanceType string
 }
 
 // MaxSize returns maximum size of the node group.
@@ -146,9 +145,9 @@ func (n *hetznerNodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
 			waitGroup.Done()
 		}(node)
 	}
-	waitGroup.Wait()
 
-	n.resetTargetSize(-len(nodes))
+	waitGroup.Wait()
+	n.refreshServers()
 
 	return nil
 }
@@ -159,7 +158,13 @@ func (n *hetznerNodeGroup) DeleteNodes(nodes []*apiv1.Node) error {
 // It is assumed that cloud provider will not delete the existing nodes when there
 // is an option to just decrease the target. Implementation required.
 func (n *hetznerNodeGroup) DecreaseTargetSize(delta int) error {
-	n.targetSize = n.targetSize + delta
+	targetSize := n.targetSize + delta
+	if targetSize < n.MinSize() {
+		return fmt.Errorf("size decrease is too large. current: %d desired: %d min: %d", n.targetSize, targetSize, n.MinSize())
+	}
+
+	n.targetSize = targetSize
+
 	return nil
 }
 
@@ -177,18 +182,8 @@ func (n *hetznerNodeGroup) Debug() string {
 // required that Instance objects returned by this method have Id field set.
 // Other fields are optional.
 func (n *hetznerNodeGroup) Nodes() ([]cloudprovider.Instance, error) {
-	listOptions := hcloud.ListOpts{
-		PerPage:       50,
-		LabelSelector: nodeGroupLabel + "=" + n.id,
-	}
-	requestOptions := hcloud.ServerListOpts{ListOpts: listOptions}
-	servers, err := n.manager.client.Server.AllWithOpts(n.manager.apiCallContext, requestOptions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get servers for hcloud: %v", err)
-	}
-
-	instances := make([]cloudprovider.Instance, 0, len(servers))
-	for _, vm := range servers {
+	instances := make([]cloudprovider.Instance, 0, len(n.servers))
+	for _, vm := range n.servers {
 		instances = append(instances, toInstance(vm))
 	}
 
@@ -242,9 +237,7 @@ func (n *hetznerNodeGroup) Exist() bool {
 // Create creates the node group on the cloud provider side. Implementation
 // optional.
 func (n *hetznerNodeGroup) Create() (cloudprovider.NodeGroup, error) {
-	n.manager.nodeGroups[n.id] = n
-
-	return n, cloudprovider.ErrNotImplemented
+	return _, cloudprovider.ErrNotImplemented
 }
 
 // Delete deletes the node group on the cloud provider side.  This will be
@@ -252,7 +245,7 @@ func (n *hetznerNodeGroup) Create() (cloudprovider.NodeGroup, error) {
 // Implementation optional.
 func (n *hetznerNodeGroup) Delete() error {
 	// We do not use actual node groups but all nodes within the Hcloud project are labeled with a group
-	return nil
+	return cloudprovider.ErrNotImplemented
 }
 
 // Autoprovisioned returns true if the node group is autoprovisioned. An
@@ -361,6 +354,81 @@ func createServer(n *hetznerNodeGroup) error {
 	}
 
 	server := serverCreateResult.Server
+
+	if n.network != nil {
+		allocatedIPs := []net.IP{}
+
+		_, s := range n.servers {
+			_, p := range s.PrivateNet {
+				if p.Network.ID == n.network.ID {
+					append(allocatedIPs, p.IP, p.AliasIPs...)
+				}
+			}
+		}
+
+		readBuf := make([]byte, 8)
+		writeBuf := new(bytes.Buffer)
+
+		bufIdx := len(readBuf) - len(n.ipNet.IP)
+		if bufIdx < 0 {
+			bufIdx = 0
+		}
+		
+		ipNetIdx := len(n.ipNet.IP) - len(readBuf)
+		if ipNetIdx < 0 {
+			ipNetIdx = 0
+		}
+		
+		copy(readBuf[bufIdx:], n.ipNet.IP[ipNetIdx:])
+
+		ipNetUint64 := uint64(0)
+		if err := binary.Read(bytes.NewReader(readBuf), binary.BigEndian, &ipNetUint64); err != nil {
+			return fmt.Errorf("could not transform into uint64: %v", err)
+		}
+
+		scheduledIP := make(net.IP, len(n.ipNet.IP))
+		copy(scheduledIP, n.ipNet.IP)
+
+		NEXT_IP:
+		for ; n.ipNet.Contains(scheduledIP); ipNetUint64++ {
+			writeBuf.Reset()
+			if err := binary.Write(writeBuf, binary.BigEndian, ipNetUint64); err != nil {
+				return fmt.Errorf("could not transform from uint64: %v", err)
+			}
+
+			copy(scheduledIP[ipNetIdx:], writeBuf.Bytes()[bufIdx:])
+
+			lastByte := scheduledIP[len(scheduledIP) - 1]
+			if lastByte == 0 || lastByte == 1 || lastByte == 255 {
+			    continue
+			}
+
+			range allocatedIP := allocatedIPs {
+				if scheduledIP.Equal(allocatedIP) {
+					continue NEXT_IP
+				}
+			}
+
+			// no matching ips found
+			break
+		}
+
+		if !n.ipNet.Contains(scheduledIP) {
+			_ = n.manager.deleteServer(server)
+			return fmt.Errorf("could not find matching ip address for server %d in network %d within subnet %v", server.ID, n.network.ID, n.ipNet)
+		}
+
+		networkAttachResult, _, err := n.manager.client.Server.AttachToNetwork(n.manager.apiCallContext, hcloud.ServerAttachToNetworkOpts{
+			Network: n.network,
+			IP:      scheduledIP,
+		})
+
+		if err != nil {
+			_ = n.manager.deleteServer(server)
+			return fmt.Errorf("could not attach server %d to network %d with ip %s: %v", server.ID, n.network.ID, scheduledIP, err)
+		}
+	}
+
 	err = waitForServerStatus(n.manager, server, hcloud.ServerStatusRunning)
 	if err != nil {
 		_ = n.manager.deleteServer(server)
@@ -398,13 +466,16 @@ func waitForServerStatus(m *hetznerManager, server *hcloud.Server, status hcloud
 	}
 }
 
-func (n *hetznerNodeGroup) resetTargetSize(expectedDelta int) {
+func (n *hetznerNodeGroup) refreshServers() error {
 	servers, err := n.manager.allServers(n.id)
 	if err != nil {
-		klog.Errorf("failed to set node pool %s size, using delta %d error: %v", n.id, expectedDelta, err)
-		n.targetSize = n.targetSize - expectedDelta
-	} else {
-		klog.Infof("Set node group %s size from %d to %d, expected delta %d", n.id, n.targetSize, len(servers), expectedDelta)
-		n.targetSize = len(servers)
+		klog.Errorf("failed to set node pool %s size, error: %v", n.id, err)
+		return err
 	}
+
+	klog.Infof("Set node group %s size from %d to %d", n.id, n.targetSize, len(servers))
+	n.servers = servers
+	n.targetSize = len(servers)
+
+	return nil
 }

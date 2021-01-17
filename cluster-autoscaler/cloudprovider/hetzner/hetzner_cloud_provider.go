@@ -24,6 +24,7 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/config"
 	"k8s.io/autoscaler/cluster-autoscaler/utils/errors"
 	"k8s.io/klog/v2"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -161,7 +162,7 @@ func (d *HetznerCloudProvider) Cleanup() error {
 // by NodeGroups() can change as a result of CloudProvider.Refresh().
 func (d *HetznerCloudProvider) Refresh() error {
 	for _, group := range d.manager.nodeGroups {
-		group.resetTargetSize(0)
+		group.refreshServers()
 	}
 	return nil
 }
@@ -181,44 +182,35 @@ func BuildHetzner(_ config.AutoscalingOptions, do cloudprovider.NodeGroupDiscove
 	validNodePoolName := regexp.MustCompile(`^[a-z0-9A-Z]+[a-z0-9A-Z\-\.\_]*[a-z0-9A-Z]+$|^[a-z0-9A-Z]{1}$`)
 	clusterUpdateLock := sync.Mutex{}
 
-	for _, nodegroupSpec := range do.NodeGroupSpecs {
-		spec, err := createNodePoolSpec(nodegroupSpec)
+	for _, nodeGroupSpec := range do.NodeGroupSpecs {
+		group, err := createNodeGroup(manager, nodeGroupSpec)
 		if err != nil {
-			klog.Fatalf("Failed to parse pool spec `%s` provider: %v", nodegroupSpec, err)
+			klog.Fatalf("Failed to parse pool spec `%s` provider: %v", nodeGroupSpec, err)
 		}
 
-		validNodePoolName.MatchString(spec.name)
-		servers, err := manager.allServers(spec.name)
-		if err != nil {
-			klog.Fatalf("Failed to get servers for for node pool %s error: %v", nodegroupSpec, err)
-		}
+		validNodePoolName.MatchString(group.id)
 
-		manager.nodeGroups[spec.name] = &hetznerNodeGroup{
-			manager:            manager,
-			id:                 spec.name,
-			minSize:            spec.minSize,
-			maxSize:            spec.maxSize,
-			instanceType:       strings.ToLower(spec.instanceType),
-			region:             strings.ToLower(spec.region),
-			targetSize:         len(servers),
-			clusterUpdateMutex: &clusterUpdateLock,
-		}
+		group.clusterUpdateMutex = &clusterUpdateLock
+		group.refreshServers()
+		manager.nodeGroups[group.id] = group
 	}
 
 	return provider
 }
 
-func createNodePoolSpec(groupSpec string) (*hetznerNodeGroupSpec, error) {
-	tokens := strings.SplitN(groupSpec, ":", 5)
-	if len(tokens) != 5 {
-		return nil, fmt.Errorf("expected format `<min-servers>:<max-servers>:<machine-type>:<region>:<name>` got %s", groupSpec)
+func createNodeGroup(manager *hetznerManager, groupSpec string) (*hetznerNodeGroup, error) {
+	tokens := strings.SplitN(groupSpec, ":", 7)
+	if len(tokens) != 5 && len(tokens) != 7 {
+		return nil, fmt.Errorf("expected format `<min-servers>:<max-servers>:<machine-type>:<region>:<name>(:<network>:<ip-cidr>)` got %s", groupSpec)
 	}
 
-	definition := hetznerNodeGroupSpec{
-		instanceType: tokens[2],
-		region:       tokens[3],
-		name:         tokens[4],
+	definition := &hetznerNodeGroup{
+		id:           tokens[4],
+		manager:      manager,
+		instanceType: strings.ToLower(tokens[2]),
+		region:       strings.ToLower(tokens[3]),
 	}
+
 	if size, err := strconv.Atoi(tokens[0]); err == nil {
 		definition.minSize = size
 	} else {
@@ -231,7 +223,22 @@ func createNodePoolSpec(groupSpec string) (*hetznerNodeGroupSpec, error) {
 		return nil, fmt.Errorf("failed to set max size: %s, expected integer", tokens[1])
 	}
 
-	return &definition, nil
+	if len(tokens) == 7 {
+		network, _, err := manager.client.Get(manager.apiCallContext, tokens[6])
+		if err != nil {
+			return nil, fmt.Errorf("failed to find network by name or id: %s, expected existing network", tokens[6])
+		}
+
+		_, ipNet, err := net.ParseCIDR(tokens[7])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse IP CIDR: %s, expected CIDR notation, e.g. 192.0.2.0/24 or 2001:db8::/32", tokens[7])
+		}
+
+		definition.network = network
+		definition.ipNet = ipNet
+	}
+
+	return definition, nil
 }
 
 func newHetznerCloudProvider(manager *hetznerManager, rl *cloudprovider.ResourceLimiter) (*HetznerCloudProvider, error) {
