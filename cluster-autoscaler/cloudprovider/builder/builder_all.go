@@ -1,4 +1,4 @@
-// +build !gce,!aws,!azure,!kubemark,!alicloud,!magnum,!digitalocean,!clusterapi,!huaweicloud
+// +build !gce,!aws,!azure,!hetzner,!kubemark,!alicloud,!magnum,!digitalocean,!clusterapi,!huaweicloud
 
 /*
 Copyright 2018 The Kubernetes Authors.
