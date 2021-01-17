@@ -224,14 +224,14 @@ func createNodeGroup(manager *hetznerManager, groupSpec string) (*hetznerNodeGro
 	}
 
 	if len(tokens) == 7 {
-		network, _, err := manager.client.Network.Get(manager.apiCallContext, tokens[6])
+		network, _, err := manager.client.Network.Get(manager.apiCallContext, tokens[5])
 		if err != nil {
-			return nil, fmt.Errorf("failed to find network by name or id: %s, expected existing network", tokens[6])
+			return nil, fmt.Errorf("failed to find network by name or id: %s, expected existing network", tokens[5])
 		}
 
-		_, ipNet, err := net.ParseCIDR(tokens[7])
+		_, ipNet, err := net.ParseCIDR(tokens[6])
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse IP CIDR: %s, expected CIDR notation, e.g. 192.0.2.0/24 or 2001:db8::/32", tokens[7])
+			return nil, fmt.Errorf("failed to parse IP CIDR: %s, expected CIDR notation, e.g. 192.0.2.0/24 or 2001:db8::/32", tokens[6])
 		}
 
 		definition.network = network

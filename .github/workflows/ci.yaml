@@ -15,7 +15,7 @@ jobs:
         run: "make build-in-docker"
         working-directory: cluster-autoscaler
       - name: Push to GitHub Packages
-        uses: docker/build-push-action@v1
+        uses: docker/build-push-action@v2
         with:
           context: cluster-autoscaler
           username: ${{ github.actor }}

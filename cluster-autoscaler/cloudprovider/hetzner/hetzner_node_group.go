@@ -30,6 +30,7 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -295,7 +296,11 @@ func toInstanceStatus(status hcloud.ServerStatus) *cloudprovider.InstanceStatus 
 	return st
 }
 
-func newNodeName(n *hetznerNodeGroup) string {
+func newNodeName(n *hetznerNodeGroup, scheduledIP Net.IP) string {
+	if scheduledIP != nil {
+		return fmt.Sprintf("%s-%s", n.id, strings.replace(scheduledIP, ".", "-"))
+	}
+
 	return fmt.Sprintf("%s-%d", n.id, rand.Int63())
 }
 
@@ -338,24 +343,7 @@ func serverTypeAvailable(manager *hetznerManager, instanceType string, region st
 }
 
 func createServer(n *hetznerNodeGroup) error {
-	StartAfterCreate := true
-	serverCreateResult, _, err := n.manager.client.Server.Create(n.manager.apiCallContext, hcloud.ServerCreateOpts{
-		Name:             newNodeName(n),
-		UserData:         n.manager.cloudInit,
-		Location:         &hcloud.Location{Name: n.region},
-		ServerType:       &hcloud.ServerType{Name: n.instanceType},
-		Image:            &hcloud.Image{Name: n.manager.image},
-		StartAfterCreate: &StartAfterCreate,
-		Labels: map[string]string{
-			nodeGroupLabel: n.id,
-		},
-	})
-
-	if err != nil {
-		return fmt.Errorf("could not create server type %s in region %s", n.instanceType, n.region)
-	}
-
-	server := serverCreateResult.Server
+	var scheduledIP net.IP
 
 	if n.network != nil {
 		allocatedIPs := []net.IP{}
@@ -389,7 +377,7 @@ func createServer(n *hetznerNodeGroup) error {
 			return fmt.Errorf("could not transform into uint64: %v", err)
 		}
 
-		scheduledIP := make(net.IP, len(n.ipNet.IP))
+		scheduledIP = make(net.IP, len(n.ipNet.IP))
 		copy(scheduledIP, n.ipNet.IP)
 
 		NEXT_IP:
@@ -417,10 +405,30 @@ func createServer(n *hetznerNodeGroup) error {
 		}
 
 		if !n.ipNet.Contains(scheduledIP) {
-			_ = n.manager.deleteServer(server)
 			return fmt.Errorf("could not find matching ip address for server %d in network %d within subnet %v", server.ID, n.network.ID, n.ipNet)
 		}
+	}
 
+	StartAfterCreate := true
+	serverCreateResult, _, err := n.manager.client.Server.Create(n.manager.apiCallContext, hcloud.ServerCreateOpts{
+		Name:             newNodeName(n, scheduledIP),
+		UserData:         n.manager.cloudInit,
+		Location:         &hcloud.Location{Name: n.region},
+		ServerType:       &hcloud.ServerType{Name: n.instanceType},
+		Image:            &hcloud.Image{Name: n.manager.image},
+		StartAfterCreate: &StartAfterCreate,
+		Labels: map[string]string{
+			nodeGroupLabel: n.id,
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("could not create server type %s in region %s", n.instanceType, n.region)
+	}
+
+	server := serverCreateResult.Server
+
+	if n.network != nil {
 		_, _, err := n.manager.client.Server.AttachToNetwork(n.manager.apiCallContext, server, hcloud.ServerAttachToNetworkOpts{
 			Network: n.network,
 			IP:      scheduledIP,
