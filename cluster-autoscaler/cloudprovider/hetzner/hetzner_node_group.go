@@ -417,8 +417,8 @@ func createServer(n *hetznerNodeGroup) error {
 		ServerType:       &hcloud.ServerType{Name: n.instanceType},
 		Image:            &hcloud.Image{Name: n.manager.image},
 		StartAfterCreate: &StartAfterCreate,
-		SSHKeys:          []hcloud.SSHKey {
-			&hcloud.SSHKey{Name: n.manager.sshKey},
+		SSHKeys:          &[]hcloud.SSHKey {
+			hcloud.SSHKey{Name: n.manager.sshKey},
 		},
 		Labels: map[string]string{
 			nodeGroupLabel: n.id,
