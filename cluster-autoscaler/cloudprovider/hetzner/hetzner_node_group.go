@@ -410,8 +410,16 @@ func createServer(n *hetznerNodeGroup) error {
 	}
 
 	sshKeys := make([]*hcloud.SSHKey, 0, len(n.manager.sshKeys))
-	for _, sshKey := range n.manager.sshKeys {
-		sshKeys = append(sshKeys, &hcloud.SSHKey{Name: sshKey})
+	for _, sshKeyName := range n.manager.sshKeys {
+		sshKey, _, err := n.manager.client.SSHKey.GetByName(n.manager.apiCallContext, sshKeyName)
+
+		if err != nil {
+			return fmt.Errorf("could not find ssh key %s, error: %v", sshKeyName, err)
+		}
+
+		if sshKey != nil {
+			sshKeys = append(sshKeys, sshKey)
+		}
 	}
 
 	StartAfterCreate := true
