@@ -426,7 +426,7 @@ func createServer(n *hetznerNodeGroup) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("could not create server type %s in region %s", n.instanceType, n.region)
+		return fmt.Errorf("could not create server type %s in region %s, error: %v", n.instanceType, n.region, err)
 	}
 
 	server := serverCreateResult.Server
