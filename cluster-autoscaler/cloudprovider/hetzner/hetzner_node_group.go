@@ -428,6 +428,12 @@ func createServer(n *hetznerNodeGroup) error {
 
 	server := serverCreateResult.Server
 
+	err = waitForServerStatus(n.manager, server, hcloud.ServerStatusRunning)
+	if err != nil {
+		_ = n.manager.deleteServer(server)
+		return fmt.Errorf("failed to start server %s error: %v", server.Name, err)
+	}
+
 	if n.network != nil {
 		_, _, err := n.manager.client.Server.AttachToNetwork(n.manager.apiCallContext, server, hcloud.ServerAttachToNetworkOpts{
 			Network: n.network,
@@ -440,16 +446,10 @@ func createServer(n *hetznerNodeGroup) error {
 		}
 	}
 
-	err = waitForServerStatus(n.manager, server, hcloud.ServerStatusRunning)
-	if err != nil {
-		_ = n.manager.deleteServer(server)
-		return fmt.Errorf("failed to start server %s error: %v", server.Name, err)
-	}
-
 	return nil
 }
 
-func waitForServerStatus(m *hetznerManager, server *hcloud.Server, status hcloud.ServerStatus) error {
+func waitForServerStatus(m *hetznerManager, server *hcloud.Server, status ...hcloud.ServerStatus) error {
 	errorResult := make(chan error)
 
 	go func() {
@@ -460,9 +460,11 @@ func waitForServerStatus(m *hetznerManager, server *hcloud.Server, status hcloud
 				return
 			}
 
-			if serverResponse.Status == status {
-				errorResult <- nil
-				return
+			for _, s := range status {
+				if serverResponse.Status == s {
+					errorResult <- nil
+					return
+				}
 			}
 
 			time.Sleep(1 * time.Second)
