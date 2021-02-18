@@ -39,7 +39,7 @@ type hetznerManager struct {
 	apiCallContext context.Context
 	cloudInit      string
 	image          string
-	sshKey         string
+	sshKeys        []string
 }
 
 func newManager() (*hetznerManager, error) {
@@ -58,10 +58,7 @@ func newManager() (*hetznerManager, error) {
 		image = "ubuntu-20.04"
 	}
 
-	sshKey := os.Getenv("HCLOUD_SSH_KEY")
-	if token == "" {
-		return nil, errors.New("`HCLOUD_SSH_KEY` is not specified")
-	}
+	sshKeys := strings.Split(os.Getenv("HCLOUD_SSH_KEY"), ",")
 
 	client := hcloud.NewClient(hcloud.WithToken(token))
 	ctx := context.Background()
@@ -75,7 +72,7 @@ func newManager() (*hetznerManager, error) {
 		nodeGroups:     make(map[string]*hetznerNodeGroup),
 		cloudInit:      string(cloudInit),
 		image:          image,
-		sshKey:         sshKey,
+		sshKeys:        sshKeys,
 		apiCallContext: ctx,
 	}
 

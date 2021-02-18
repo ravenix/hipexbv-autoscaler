@@ -409,6 +409,11 @@ func createServer(n *hetznerNodeGroup) error {
 		}
 	}
 
+	sshKeys := make([]*hcloud.SSHKey, 0, len(n.manager.sshKeys))
+	for _, sshKey := range n.manager.sshKeys {
+		sshKeys = append(sshKeys, &hcloud.SSHKey{Name: sshKey})
+	}
+
 	StartAfterCreate := true
 	serverCreateResult, _, err := n.manager.client.Server.Create(n.manager.apiCallContext, hcloud.ServerCreateOpts{
 		Name:             newNodeName(n, scheduledIP),
@@ -417,12 +422,7 @@ func createServer(n *hetznerNodeGroup) error {
 		ServerType:       &hcloud.ServerType{Name: n.instanceType},
 		Image:            &hcloud.Image{Name: n.manager.image},
 		StartAfterCreate: &StartAfterCreate,
-		SSHKeys:          []*hcloud.SSHKey {
-			&hcloud.SSHKey{Name: n.manager.sshKey},
-		},
-		Labels: map[string]string{
-			nodeGroupLabel: n.id,
-		},
+		SSHKeys:          sshKeys,
 	})
 
 	if err != nil {
