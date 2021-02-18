@@ -417,6 +417,9 @@ func createServer(n *hetznerNodeGroup) error {
 		ServerType:       &hcloud.ServerType{Name: n.instanceType},
 		Image:            &hcloud.Image{Name: n.manager.image},
 		StartAfterCreate: &StartAfterCreate,
+		SSHKeys:          []hcloud.SSHKey {
+			&hcloud.SSHKey{Name: n.manager.sshKey},
+		},
 		Labels: map[string]string{
 			nodeGroupLabel: n.id,
 		},
@@ -428,10 +431,10 @@ func createServer(n *hetznerNodeGroup) error {
 
 	server := serverCreateResult.Server
 
-	err = waitForServerStatus(n.manager, server, hcloud.ServerStatusRunning)
+	err = waitForServerStatus(n.manager, server, hcloud.ServerStatusStarting, hcloud.ServerStatusRunning)
 	if err != nil {
 		_ = n.manager.deleteServer(server)
-		return fmt.Errorf("failed to start server %s error: %v", server.Name, err)
+		return fmt.Errorf("failed to start server %s, error: %v", server.Name, err)
 	}
 
 	if n.network != nil {
@@ -444,6 +447,12 @@ func createServer(n *hetznerNodeGroup) error {
 			_ = n.manager.deleteServer(server)
 			return fmt.Errorf("could not attach server %d to network %d with ip %s: %v", server.ID, n.network.ID, scheduledIP, err)
 		}
+	}
+
+	err = waitForServerStatus(n.manager, server, hcloud.ServerStatusRunning)
+	if err != nil {
+		_ = n.manager.deleteServer(server)
+		return fmt.Errorf("failed to wait for server %s running, error: %v", server.Name, err)
 	}
 
 	return nil
