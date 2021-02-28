@@ -38,7 +38,7 @@ import (
 // configuration info and functions to control a set of nodes that have the
 // same capacity and set of labels.
 type hetznerNodeGroup struct {
-	id           string
+	Id           string
 	manager      *hetznerManager
 	minSize      int
 	maxSize      int
