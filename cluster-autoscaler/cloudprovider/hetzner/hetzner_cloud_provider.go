@@ -188,11 +188,11 @@ func BuildHetzner(_ config.AutoscalingOptions, do cloudprovider.NodeGroupDiscove
 			klog.Fatalf("Failed to parse pool spec `%s` provider: %v", nodeGroupSpec, err)
 		}
 
-		validNodePoolName.MatchString(group.id)
+		validNodePoolName.MatchString(group.Id())
 
 		group.clusterUpdateMutex = &clusterUpdateLock
 		group.refreshServers()
-		manager.nodeGroups[group.id] = group
+		manager.nodeGroups[group.Id()] = group
 	}
 
 	return provider
@@ -205,7 +205,7 @@ func createNodeGroup(manager *hetznerManager, groupSpec string) (*hetznerNodeGro
 	}
 
 	definition := &hetznerNodeGroup{
-		id:           tokens[4],
+		Id:           tokens[4],
 		manager:      manager,
 		instanceType: strings.ToLower(tokens[2]),
 		region:       strings.ToLower(tokens[3]),

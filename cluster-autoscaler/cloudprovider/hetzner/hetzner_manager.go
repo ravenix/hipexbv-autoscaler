@@ -145,7 +145,7 @@ func newManager() (*hetznerManager, error) {
 		targetSize:   0,
 		maxSize:      0,
 		minSize:      0,
-		id:           drainingNodePoolId,
+		Name          drainingNodePoolId,
 	}
 
 	return m, nil

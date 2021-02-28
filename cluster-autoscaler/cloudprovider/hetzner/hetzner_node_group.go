@@ -38,7 +38,7 @@ import (
 // configuration info and functions to control a set of nodes that have the
 // same capacity and set of labels.
 type hetznerNodeGroup struct {
-	Id           string
+	Name         string
 	manager      *hetznerManager
 	minSize      int
 	maxSize      int
@@ -56,6 +56,10 @@ type hetznerNodeGroup struct {
 type NodeNameRequest struct {
 	NodeGroup *hetznerNodeGroup
 	ScheduledIP string
+}
+
+func (n *hetznerNodeGroup) Id() string {
+	return n.Name
 }
 
 // MaxSize returns maximum size of the node group.
@@ -90,7 +94,7 @@ func (n *hetznerNodeGroup) IncreaseSize(delta int) error {
 		return fmt.Errorf("size increase is too large. current: %d desired: %d max: %d", n.targetSize, targetSize, n.MaxSize())
 	}
 
-	klog.V(4).Infof("Scaling Instance Pool %s to %d", n.Id, targetSize)
+	klog.V(4).Infof("Scaling Instance Pool %s to %d", n.Id(), targetSize)
 
 	n.clusterUpdateMutex.Lock()
 	defer n.clusterUpdateMutex.Unlock()
@@ -177,7 +181,7 @@ func (n *hetznerNodeGroup) DecreaseTargetSize(delta int) error {
 
 // Debug returns a string containing all information regarding this node group.
 func (n *hetznerNodeGroup) Debug() string {
-	return fmt.Sprintf("cluster ID: %s (min:%d max:%d)", n.Id, n.MinSize(), n.MaxSize())
+	return fmt.Sprintf("cluster ID: %s (min:%d max:%d)", n.Id(), n.MinSize(), n.MaxSize())
 }
 
 // Nodes returns a list of all nodes that belong to this node group.  It is
@@ -202,7 +206,7 @@ func (n *hetznerNodeGroup) Nodes() ([]cloudprovider.Instance, error) {
 func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, error) {
 	resourceList, err := getMachineTypeResourceList(n.manager, n.instanceType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create resource list for node group %s error: %v", n.Id, err)
+		return nil, fmt.Errorf("failed to create resource list for node group %s error: %v", n.Id(), err)
 	}
 
 	nameRequest := NodeNameRequest{
@@ -224,10 +228,10 @@ func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, err
 	node.Labels = cloudprovider.JoinStringMaps(node.Labels, buildNodeGroupLabels(n))
 	node.Status.Conditions = cloudprovider.BuildReadyConditions()
 
-	nodeInfo := schedulerframework.NewNodeInfo(cloudprovider.BuildKubeProxy(n.Id))
+	nodeInfo := schedulerframework.NewNodeInfo(cloudprovider.BuildKubeProxy(n.Id()))
 	err = nodeInfo.SetNode(&node)
 	if err != nil {
-		return nil, fmt.Errorf("could not create node info for node group %s error: %v", n.Id, err)
+		return nil, fmt.Errorf("could not create node info for node group %s error: %v", n.Id(), err)
 	}
 
 	return nodeInfo, nil
@@ -237,7 +241,7 @@ func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, err
 // Allows to tell the theoretical node group from the real one. Implementation
 // required.
 func (n *hetznerNodeGroup) Exist() bool {
-	_, exists := n.manager.nodeGroups[n.Id]
+	_, exists := n.manager.nodeGroups[n.Id()]
 	return exists
 }
 
@@ -312,14 +316,14 @@ func newNodeName(request *NodeNameRequest) string {
 		}
 	}
 
-	return fmt.Sprintf("%s-%d", request.NodeGroup.id, rand.Int63())
+	return fmt.Sprintf("%s-%d", request.NodeGroup.Id(), rand.Int63())
 }
 
 func buildNodeGroupLabels(n *hetznerNodeGroup) map[string]string {
 	return map[string]string{
 		apiv1.LabelInstanceType:     n.instanceType,
 		apiv1.LabelZoneRegionStable: n.region,
-		nodeGroupLabel:              n.Id,
+		nodeGroupLabel:              n.Id(),
 	}
 }
 
@@ -513,13 +517,13 @@ func waitForServerStatus(m *hetznerManager, server *hcloud.Server, status ...hcl
 }
 
 func (n *hetznerNodeGroup) refreshServers() error {
-	servers, err := n.manager.allServers(n.Id)
+	servers, err := n.manager.allServers(n.Id())
 	if err != nil {
-		klog.Errorf("failed to set node pool %s size, error: %v", n.Id, err)
+		klog.Errorf("failed to set node pool %s size, error: %v", n.Id(), err)
 		return err
 	}
 
-	klog.Infof("Set node group %s size from %d to %d", n.Id, n.targetSize, len(servers))
+	klog.Infof("Set node group %s size from %d to %d", n.Id(), n.targetSize, len(servers))
 	n.servers = servers
 	n.targetSize = len(servers)
 
