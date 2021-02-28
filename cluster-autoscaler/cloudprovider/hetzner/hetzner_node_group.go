@@ -175,14 +175,9 @@ func (n *hetznerNodeGroup) DecreaseTargetSize(delta int) error {
 	return nil
 }
 
-// Id returns an unique identifier of the node group.
-func (n *hetznerNodeGroup) Id() string {
-	return n.Id
-}
-
 // Debug returns a string containing all information regarding this node group.
 func (n *hetznerNodeGroup) Debug() string {
-	return fmt.Sprintf("cluster ID: %s (min:%d max:%d)", n.Id(), n.MinSize(), n.MaxSize())
+	return fmt.Sprintf("cluster ID: %s (min:%d max:%d)", n.Id, n.MinSize(), n.MaxSize())
 }
 
 // Nodes returns a list of all nodes that belong to this node group.  It is
@@ -306,9 +301,9 @@ func toInstanceStatus(status hcloud.ServerStatus) *cloudprovider.InstanceStatus 
 }
 
 func newNodeName(request *NodeNameRequest) string {
-	if request.nodeGroup.manager.nameTemplate != nil {
+	if request.NodeGroup.manager.nameTemplate != nil {
 		var buf bytes.Buffer
-		err := request.nodeGroup.manager.nameTemplate.Execute(&buf, request)
+		err := request.NodeGroup.manager.nameTemplate.Execute(&buf, request)
 
 		if err == nil {
 			return buf.String()
@@ -317,7 +312,7 @@ func newNodeName(request *NodeNameRequest) string {
 		}
 	}
 
-	return fmt.Sprintf("%s-%d", request.nodeGroup.id, rand.Int63())
+	return fmt.Sprintf("%s-%d", request.NodeGroup.id, rand.Int63())
 }
 
 func buildNodeGroupLabels(n *hetznerNodeGroup) map[string]string {
