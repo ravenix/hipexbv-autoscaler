@@ -25,11 +25,60 @@ import (
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider/hetzner/hcloud-go/hcloud"
 	"os"
 	"strings"
+	"text/template"
 )
 
 var (
 	version = "dev"
 )
+
+var nameTemplateFuncMap = template.FuncMap{
+	"compare": strings.Compare,
+	"contains": strings.Contains,
+	"containsAny": strings.ContainsAny,
+	"containsRune": strings.ContainsRune,
+	"count": strings.Count,
+	"equalFold": strings.EqualFold,
+	"fields": strings.Fields,
+	//"fieldsFunc": strings.FieldsFunc,
+	"hasPrefix": strings.HasPrefix,
+	"hasSuffix": strings.HasSuffix,
+	//"index": strings.Index,
+	"indexAny": strings.IndexAny,
+	"indexByte": strings.IndexByte,
+	//"indexFunc": strings.IndexFunc,
+	"indexRune": strings.IndexRune,
+	"join": strings.Join,
+	"lastIndex": strings.LastIndex,
+	"lastIndexAny": strings.LastIndexAny,
+	"lastIndexByte": strings.LastIndexByte,
+	//"lastIndexFunc": strings.LastIndexFunc,
+	//"map": strings.Map,
+	"repeat": strings.Repeat,
+	"replace": strings.Replace,
+	"replaceAll": strings.ReplaceAll,
+	"split": strings.Split,
+	"splitAfter": strings.SplitAfter,
+	"splitAfterN": strings.SplitAfterN,
+	"splitN": strings.SplitN,
+	//"title": strings.Title,
+	"toLower": strings.ToLower,
+	//"toLowerSpecial": strings.ToLowerSpecial,
+	"toTitle": strings.ToTitle,
+	//"toTitleSpecial": strings.ToTitleSpecial,
+	"toUpper": strings.ToUpper,
+	//"toUpperSpecial": strings.ToUpperSpecial,
+	"toValidUTF8": strings.ToValidUTF8,
+	"trim": strings.Trim,
+	//"trimFunc": strings.TrimFunc,
+	"trimLeft": strings.TrimLeft,
+	//"trimLeftFunc": strings.TrimLeftFunc,
+	"trimPrefix": strings.TrimPrefix,
+	"trimRight": strings.TrimRight,
+	//"trimRightFunc": strings.TrimRightFunc,
+	"trimSpace": strings.TrimSpace,
+	"trimSuffix": strings.TrimSuffix,
+}
 
 // hetznerManager handles Hetzner communication and data caching of
 // node groups
@@ -39,6 +88,7 @@ type hetznerManager struct {
 	apiCallContext context.Context
 	cloudInit      string
 	image          string
+	nameTemplate   *template.Template
 	sshKeys        []string
 }
 
@@ -58,6 +108,15 @@ func newManager() (*hetznerManager, error) {
 		image = "ubuntu-20.04"
 	}
 
+	var nameTemplate *template.Template
+
+	if nameTemplateStr := os.Getenv("HCLOUD_NAME_TEMPLATE"); nameTemplateStr != "" {
+		nameTemplate, err = template.New("nameTemplate").Funcs(nameTemplateFuncMap).Parse(nameTemplate)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse name template: %s", err)
+		}
+	}
+
 	sshKeys := strings.Split(os.Getenv("HCLOUD_SSH_KEY"), ",")
 
 	client := hcloud.NewClient(hcloud.WithToken(token))
@@ -71,6 +130,7 @@ func newManager() (*hetznerManager, error) {
 		client:         client,
 		nodeGroups:     make(map[string]*hetznerNodeGroup),
 		cloudInit:      string(cloudInit),
+		nameTemplate:   nameTemplate,
 		image:          image,
 		sshKeys:        sshKeys,
 		apiCallContext: ctx,

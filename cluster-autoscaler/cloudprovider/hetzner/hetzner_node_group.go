@@ -46,12 +46,17 @@ type hetznerNodeGroup struct {
 	targetSize   int
 	region       string
 	instanceType string
-	servers      []*hcloud.Server
 
+	servers      []*hcloud.Server
 	network      *hcloud.Network
 	ipNet        *net.IPNet
 
 	clusterUpdateMutex *sync.Mutex
+}
+
+type nodeNameRequest struct {
+	nodeGroup *hetznerNodeGroup
+	scheduledIP string
 }
 
 // MaxSize returns maximum size of the node group.
@@ -206,9 +211,14 @@ func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, err
 		return nil, fmt.Errorf("failed to create resource list for node group %s error: %v", n.id, err)
 	}
 
+	nameRequest := nodeNameRequest{
+		nodeGroup: &n,
+		scheduledIP: nil,
+	}
+
 	node := apiv1.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   newNodeName(n, nil),
+			Name:   newNodeName(&nameRequest),
 			Labels: map[string]string{},
 		},
 		Status: apiv1.NodeStatus{
@@ -296,12 +306,17 @@ func toInstanceStatus(status hcloud.ServerStatus) *cloudprovider.InstanceStatus 
 	return st
 }
 
-func newNodeName(n *hetznerNodeGroup, scheduledIP net.IP) string {
-	if scheduledIP != nil {
-		return fmt.Sprintf("%s-%s", n.id, strings.ReplaceAll(strings.ReplaceAll(scheduledIP.String(), ".", "-"), ":", "-"))
+func newNodeName(request *nodeNameRequest) string {
+	if n.manager.nameTemplate != nil {
+		var buf bytes.Buffer
+		err := sc.fqdnTemplate.Execute(&buf, request)
+
+		if err != nil {
+			return buf.String()
+		}
 	}
 
-	return fmt.Sprintf("%s-%d", n.id, rand.Int63())
+	return fmt.Sprintf("%s-%d", request.nodeGroup.id, rand.Int63())
 }
 
 func buildNodeGroupLabels(n *hetznerNodeGroup) map[string]string {
@@ -422,9 +437,14 @@ func createServer(n *hetznerNodeGroup) error {
 		}
 	}
 
+	nameRequest := nodeNameRequest{
+		nodeGroup: &n,
+		scheduledIP: scheduledIP.String(),
+	}
+
 	StartAfterCreate := true
 	serverCreateResult, _, err := n.manager.client.Server.Create(n.manager.apiCallContext, hcloud.ServerCreateOpts{
-		Name:             newNodeName(n, scheduledIP),
+		Name:             newNodeName(&nameRequest),
 		UserData:         n.manager.cloudInit,
 		Location:         &hcloud.Location{Name: n.region},
 		ServerType:       &hcloud.ServerType{Name: n.instanceType},
