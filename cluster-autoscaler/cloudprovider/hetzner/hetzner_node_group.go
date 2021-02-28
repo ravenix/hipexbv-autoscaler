@@ -310,8 +310,10 @@ func newNodeName(request *nodeNameRequest) string {
 		var buf bytes.Buffer
 		err := request.nodeGroup.manager.nameTemplate.Execute(&buf, request)
 
-		if err != nil {
+		if err == nil {
 			return buf.String()
+		} else {
+			klog.Errorf("failed to apply name template: %v", err)
 		}
 	}
 
