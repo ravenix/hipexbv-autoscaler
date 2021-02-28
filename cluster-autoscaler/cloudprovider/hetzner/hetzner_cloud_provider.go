@@ -205,7 +205,7 @@ func createNodeGroup(manager *hetznerManager, groupSpec string) (*hetznerNodeGro
 	}
 
 	definition := &hetznerNodeGroup{
-		Id:           tokens[4],
+		Name:         tokens[4],
 		manager:      manager,
 		instanceType: strings.ToLower(tokens[2]),
 		region:       strings.ToLower(tokens[3]),
