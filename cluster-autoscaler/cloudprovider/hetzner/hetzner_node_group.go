@@ -53,9 +53,9 @@ type hetznerNodeGroup struct {
 	clusterUpdateMutex *sync.Mutex
 }
 
-type nodeNameRequest struct {
-	nodeGroup *hetznerNodeGroup
-	scheduledIP string
+type NodeNameRequest struct {
+	NodeGroup *hetznerNodeGroup
+	ScheduledIP string
 }
 
 // MaxSize returns maximum size of the node group.
@@ -90,7 +90,7 @@ func (n *hetznerNodeGroup) IncreaseSize(delta int) error {
 		return fmt.Errorf("size increase is too large. current: %d desired: %d max: %d", n.targetSize, targetSize, n.MaxSize())
 	}
 
-	klog.V(4).Infof("Scaling Instance Pool %s to %d", n.id, targetSize)
+	klog.V(4).Infof("Scaling Instance Pool %s to %d", n.Id, targetSize)
 
 	n.clusterUpdateMutex.Lock()
 	defer n.clusterUpdateMutex.Unlock()
@@ -177,7 +177,7 @@ func (n *hetznerNodeGroup) DecreaseTargetSize(delta int) error {
 
 // Id returns an unique identifier of the node group.
 func (n *hetznerNodeGroup) Id() string {
-	return n.id
+	return n.Id
 }
 
 // Debug returns a string containing all information regarding this node group.
@@ -207,12 +207,12 @@ func (n *hetznerNodeGroup) Nodes() ([]cloudprovider.Instance, error) {
 func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, error) {
 	resourceList, err := getMachineTypeResourceList(n.manager, n.instanceType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create resource list for node group %s error: %v", n.id, err)
+		return nil, fmt.Errorf("failed to create resource list for node group %s error: %v", n.Id, err)
 	}
 
-	nameRequest := nodeNameRequest{
-		nodeGroup: n,
-		scheduledIP: "",
+	nameRequest := NodeNameRequest{
+		NodeGroup: n,
+		ScheduledIP: "",
 	}
 
 	node := apiv1.Node{
@@ -229,10 +229,10 @@ func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, err
 	node.Labels = cloudprovider.JoinStringMaps(node.Labels, buildNodeGroupLabels(n))
 	node.Status.Conditions = cloudprovider.BuildReadyConditions()
 
-	nodeInfo := schedulerframework.NewNodeInfo(cloudprovider.BuildKubeProxy(n.id))
+	nodeInfo := schedulerframework.NewNodeInfo(cloudprovider.BuildKubeProxy(n.Id))
 	err = nodeInfo.SetNode(&node)
 	if err != nil {
-		return nil, fmt.Errorf("could not create node info for node group %s error: %v", n.id, err)
+		return nil, fmt.Errorf("could not create node info for node group %s error: %v", n.Id, err)
 	}
 
 	return nodeInfo, nil
@@ -242,7 +242,7 @@ func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, err
 // Allows to tell the theoretical node group from the real one. Implementation
 // required.
 func (n *hetznerNodeGroup) Exist() bool {
-	_, exists := n.manager.nodeGroups[n.id]
+	_, exists := n.manager.nodeGroups[n.Id]
 	return exists
 }
 
@@ -305,7 +305,7 @@ func toInstanceStatus(status hcloud.ServerStatus) *cloudprovider.InstanceStatus 
 	return st
 }
 
-func newNodeName(request *nodeNameRequest) string {
+func newNodeName(request *NodeNameRequest) string {
 	if request.nodeGroup.manager.nameTemplate != nil {
 		var buf bytes.Buffer
 		err := request.nodeGroup.manager.nameTemplate.Execute(&buf, request)
@@ -324,7 +324,7 @@ func buildNodeGroupLabels(n *hetznerNodeGroup) map[string]string {
 	return map[string]string{
 		apiv1.LabelInstanceType:     n.instanceType,
 		apiv1.LabelZoneRegionStable: n.region,
-		nodeGroupLabel:              n.id,
+		nodeGroupLabel:              n.Id,
 	}
 }
 
@@ -438,9 +438,9 @@ func createServer(n *hetznerNodeGroup) error {
 		}
 	}
 
-	nameRequest := nodeNameRequest{
-		nodeGroup: n,
-		scheduledIP: scheduledIP.String(),
+	nameRequest := NodeNameRequest{
+		NodeGroup: n,
+		ScheduledIP: scheduledIP.String(),
 	}
 
 	StartAfterCreate := true
@@ -518,13 +518,13 @@ func waitForServerStatus(m *hetznerManager, server *hcloud.Server, status ...hcl
 }
 
 func (n *hetznerNodeGroup) refreshServers() error {
-	servers, err := n.manager.allServers(n.id)
+	servers, err := n.manager.allServers(n.Id)
 	if err != nil {
-		klog.Errorf("failed to set node pool %s size, error: %v", n.id, err)
+		klog.Errorf("failed to set node pool %s size, error: %v", n.Id, err)
 		return err
 	}
 
-	klog.Infof("Set node group %s size from %d to %d", n.id, n.targetSize, len(servers))
+	klog.Infof("Set node group %s size from %d to %d", n.Id, n.targetSize, len(servers))
 	n.servers = servers
 	n.targetSize = len(servers)
 
