@@ -30,7 +30,6 @@ import (
 	"math/rand"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -212,8 +211,8 @@ func (n *hetznerNodeGroup) TemplateNodeInfo() (*schedulerframework.NodeInfo, err
 	}
 
 	nameRequest := nodeNameRequest{
-		nodeGroup: &n,
-		scheduledIP: nil,
+		nodeGroup: n,
+		scheduledIP: "",
 	}
 
 	node := apiv1.Node{
@@ -307,9 +306,9 @@ func toInstanceStatus(status hcloud.ServerStatus) *cloudprovider.InstanceStatus 
 }
 
 func newNodeName(request *nodeNameRequest) string {
-	if n.manager.nameTemplate != nil {
+	if request.nodeGroup.manager.nameTemplate != nil {
 		var buf bytes.Buffer
-		err := sc.fqdnTemplate.Execute(&buf, request)
+		err := request.nodeGroup.manager.nameTemplate.Execute(&buf, request)
 
 		if err != nil {
 			return buf.String()
@@ -438,7 +437,7 @@ func createServer(n *hetznerNodeGroup) error {
 	}
 
 	nameRequest := nodeNameRequest{
-		nodeGroup: &n,
+		nodeGroup: n,
 		scheduledIP: scheduledIP.String(),
 	}
 

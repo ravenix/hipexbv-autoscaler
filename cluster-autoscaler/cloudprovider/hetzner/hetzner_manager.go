@@ -111,7 +111,7 @@ func newManager() (*hetznerManager, error) {
 	var nameTemplate *template.Template
 
 	if nameTemplateStr := os.Getenv("HCLOUD_NAME_TEMPLATE"); nameTemplateStr != "" {
-		nameTemplate, err = template.New("nameTemplate").Funcs(nameTemplateFuncMap).Parse(nameTemplate)
+		nameTemplate, err := template.New("nameTemplate").Funcs(nameTemplateFuncMap).Parse(nameTemplateStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse name template: %s", err)
 		}
