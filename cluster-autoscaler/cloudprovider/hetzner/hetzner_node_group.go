@@ -451,6 +451,9 @@ func createServer(n *hetznerNodeGroup) error {
 		Image:            &hcloud.Image{Name: n.manager.image},
 		StartAfterCreate: &StartAfterCreate,
 		SSHKeys:          sshKeys,
+		Labels:           map[string]string {
+			nodeGroupLabel: n.Id(),
+		},
 	})
 
 	if err != nil {

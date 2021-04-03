@@ -40,7 +40,6 @@ const (
 	providerIDPrefix       = "hcloud://"
 	nodeGroupLabel         = hcloudLabelNamespace + "/node-group"
 	hcloudLabelNamespace   = "hcloud"
-	drainingNodePoolId     = "draining-node-pool"
 	serverCreateTimeout    = 1 * time.Minute
 	serverRegisterTimeout  = 10 * time.Minute
 	defaultPodAmountsLimit = 110
